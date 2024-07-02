@@ -6,12 +6,14 @@
 	</head>
 	<body>
 		<a-scene
-			mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.0001; filterBeta: 0.001; uiError: no; uiLoading: no; uiScanning: no;"
+			mindar-image="imageTargetSrc: ./targets/1.mind, ./targets/2.mind, ./targets/3.mind; filterMinCF: 0.0001; filterBeta: 0.001; uiError: no; uiLoading: no; uiScanning: no;"
 			vr-mode-ui="enabled: false"
 			device-orientation-permission-ui="enabled: false"
 		>
 			<a-assets>
-				<video id="video" src="videos/IMG_0150.mp4"></video>
+				<video id="video1" src="videos/1.mp4"></video>
+				<video id="video2" src="videos/2.mp4"></video>
+				<video id="video3" src="videos/3.mp4"></video>
 			</a-assets>
 			<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 			<a-entity mindar-image-target="targetIndex: 0">
@@ -22,12 +24,37 @@
 					rotation="0 0 0"
 				></a-plane>
 			</a-entity>
+			<a-entity mindar-image-target="targetIndex: 1">
+				<a-plane
+					position="0 0 0"
+					height="0.552"
+					width="1"
+					rotation="0 0 0"
+				></a-plane>
+			</a-entity>
+			<a-entity mindar-image-target="targetIndex: 2">
+				<a-plane
+					position="0 0 0"
+					height="0.552"
+					width="1"
+					rotation="0 0 0"
+				></a-plane>
+			</a-entity>
 		</a-scene>
+
+		<div style="position: absolute; top: 10px; left: 10px; z-index: 1000">
+			<button id="captureButton">Capture Image</button>
+		</div>
+
+		<canvas id="canvas" style="display: none"></canvas>
 
 		<script>
 			document.addEventListener("DOMContentLoaded", function () {
 				const scene = document.querySelector("a-scene");
-				const target = document.querySelector("[mindar-image-target]");
+				const captureButton = document.getElementById("captureButton");
+				const canvas = document.getElementById("canvas");
+				const videoElement = document.querySelector("video");
+				let captureCount = 0;
 
 				scene.addEventListener("loaded", (event) => {
 					console.log("Scene loaded");
@@ -41,10 +68,85 @@
 					console.error("AR Error: ", event);
 				});
 
-				target.addEventListener("targetFound", (event) => {
-					console.log("Target found");
-					window.open("videos/IMG_0150.mp4", "_blank");
+				scene.addEventListener("targetFound", (event) => {
+					const targetIndex = event.detail.targetIndex;
+					const video = document.getElementById(`video${targetIndex + 1}`);
+					video.play();
 				});
+
+				captureButton.addEventListener("click", () => {
+					captureImageFromVideo();
+				});
+
+				function captureImageFromVideo() {
+					try {
+						const context = canvas.getContext("2d");
+						canvas.width = videoElement.videoWidth;
+						canvas.height = videoElement.videoHeight;
+						context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+						const dataUrl = canvas.toDataURL("image/png");
+						console.log("Image captured from video");
+						saveImageToFile(dataUrl, `captured-image${captureCount + 1}.png`);
+					} catch (error) {
+						console.error("Error capturing image from video:", error);
+					}
+				}
+
+				function saveImageToFile(dataUrl, fileName) {
+					console.log("Saving image to file:", fileName);
+					fetch("http://127.0.0.1:3000/api/save-image", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({ dataUrl, fileName }),
+					})
+						.then((response) => {
+							if (!response.ok) {
+								return response.json().then((error) => {
+									throw new Error(
+										`HTTP error! status: ${response.status}, message: ${error.message}`
+									);
+								});
+							}
+							return response.json();
+						})
+						.then((data) => {
+							console.log("Image saved successfully:", data);
+							processImageToMindFile(fileName, captureCount + 1);
+							captureCount++;
+						})
+						.catch((error) => {
+							console.error("Error saving image:", error);
+						});
+				}
+
+				function processImageToMindFile(fileName, index) {
+					console.log("Processing image to .mind file:", fileName);
+					fetch("http://127.0.0.1:3001/api/process-image", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({ fileName, index }),
+					})
+						.then((response) => {
+							if (!response.ok) {
+								return response.json().then((error) => {
+									throw new Error(
+										`HTTP error! status: ${response.status}, message: ${error.message}`
+									);
+								});
+							}
+							return response.json();
+						})
+						.then((data) => {
+							console.log("Image processed to .mind file successfully:", data);
+						})
+						.catch((error) => {
+							console.error("Error processing image to .mind file:", error);
+						});
+				}
 			});
 		</script>
 	</body>
